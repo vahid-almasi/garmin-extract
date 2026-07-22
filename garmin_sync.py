@@ -29,6 +29,8 @@ def fetch_activity_record(client, activity_id: str, summary: dict) -> dict:
 def _fetch_weather(client, activity_id: str) -> dict | None:
     try:
         return call_with_retry(client.get_activity_weather, activity_id)
+    except GarminConnectTooManyRequestsError:
+        raise
     except Exception:
         return None
 
@@ -38,5 +40,7 @@ def fetch_gpx(client, activity_id: str) -> bytes | None:
         return call_with_retry(
             client.download_activity, activity_id, dl_fmt=Garmin.ActivityDownloadFormat.GPX
         )
+    except GarminConnectTooManyRequestsError:
+        raise
     except Exception:
         return None

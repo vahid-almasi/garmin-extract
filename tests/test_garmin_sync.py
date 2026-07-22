@@ -95,3 +95,29 @@ def test_fetch_gpx_returns_none_on_failure():
             raise RuntimeError("no GPS data for this activity")
 
     assert fetch_gpx(NoGpsClient(), "1") is None
+
+
+def test_fetch_activity_record_propagates_exhausted_rate_limit(monkeypatch):
+    from garmin_sync import fetch_activity_record
+
+    monkeypatch.setattr("garmin_sync.time.sleep", lambda s: None)
+
+    class RateLimitedWeatherClient(DetailFakeClient):
+        def get_activity_weather(self, activity_id):
+            raise GarminConnectTooManyRequestsError("rate limited")
+
+    with pytest.raises(GarminConnectTooManyRequestsError):
+        fetch_activity_record(RateLimitedWeatherClient(), "1", {"activityId": 1})
+
+
+def test_fetch_gpx_propagates_exhausted_rate_limit(monkeypatch):
+    from garmin_sync import fetch_gpx
+
+    monkeypatch.setattr("garmin_sync.time.sleep", lambda s: None)
+
+    class RateLimitedGpsClient(DetailFakeClient):
+        def download_activity(self, activity_id, dl_fmt=None):
+            raise GarminConnectTooManyRequestsError("rate limited")
+
+    with pytest.raises(GarminConnectTooManyRequestsError):
+        fetch_gpx(RateLimitedGpsClient(), "1")

@@ -44,3 +44,53 @@ def fetch_gpx(client, activity_id: str) -> bytes | None:
         raise
     except Exception:
         return None
+
+
+from pathlib import Path
+
+from activity_store import known_activity_ids, save_activity
+
+BACKFILL_MARKER_NAME = ".backfill_complete"
+
+
+def sync(client, activities_dir, page_size: int = 20, request_delay: float = 0.75) -> list[str]:
+    activities_dir = Path(activities_dir)
+    known_ids = known_activity_ids(activities_dir)
+    marker_path = activities_dir / BACKFILL_MARKER_NAME
+    is_backfill = not marker_path.exists()
+    newly_synced: list[str] = []
+
+    start = 0
+    while True:
+        page = call_with_retry(client.get_activities, start, page_size)
+        if not page:
+            break
+
+        stop = False
+        for summary in page:
+            activity_id = str(summary["activityId"])
+
+            if activity_id in known_ids:
+                if is_backfill:
+                    continue
+                stop = True
+                break
+
+            record = fetch_activity_record(client, activity_id, summary)
+            gpx_bytes = fetch_gpx(client, activity_id)
+            save_activity(activities_dir, activity_id, record, gpx_bytes)
+
+            known_ids.add(activity_id)
+            newly_synced.append(activity_id)
+            time.sleep(request_delay)
+
+        if stop:
+            break
+
+        start += page_size
+
+    if is_backfill:
+        activities_dir.mkdir(parents=True, exist_ok=True)
+        marker_path.touch()
+
+    return newly_synced

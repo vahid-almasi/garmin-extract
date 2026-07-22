@@ -121,3 +121,81 @@ def test_fetch_gpx_propagates_exhausted_rate_limit(monkeypatch):
 
     with pytest.raises(GarminConnectTooManyRequestsError):
         fetch_gpx(RateLimitedGpsClient(), "1")
+
+
+class PagedFakeClient(DetailFakeClient):
+    def __init__(self, pages):
+        self.pages = pages
+
+    def get_activities(self, start, limit):
+        index = start // limit
+        if index >= len(self.pages):
+            return []
+        return self.pages[index]
+
+
+def make_summary(activity_id):
+    return {"activityId": activity_id}
+
+
+def test_first_run_backfills_all_pages(tmp_path):
+    from activity_store import known_activity_ids
+    from garmin_sync import sync
+
+    pages = [
+        [make_summary(3), make_summary(2)],
+        [make_summary(1)],
+    ]
+    activities_dir = tmp_path / "activities"
+
+    synced = sync(PagedFakeClient(pages), activities_dir, page_size=2, request_delay=0)
+
+    assert set(synced) == {"3", "2", "1"}
+    assert known_activity_ids(activities_dir) == {"3", "2", "1"}
+    assert (activities_dir / ".backfill_complete").exists()
+
+
+def test_incremental_run_stops_at_first_known_activity(tmp_path):
+    from garmin_sync import sync
+
+    activities_dir = tmp_path / "activities"
+    activities_dir.mkdir()
+    (activities_dir / "2.json").write_text("{}")
+    (activities_dir / ".backfill_complete").touch()
+
+    pages = [[make_summary(4), make_summary(3), make_summary(2), make_summary(1)]]
+
+    synced = sync(PagedFakeClient(pages), activities_dir, page_size=4, request_delay=0)
+
+    assert synced == ["4", "3"]
+    assert not (activities_dir / "1.json").exists()
+
+
+def test_interrupted_backfill_resumes_without_marker(tmp_path):
+    from garmin_sync import sync
+
+    activities_dir = tmp_path / "activities"
+    activities_dir.mkdir()
+    (activities_dir / "3.json").write_text("{}")  # saved before an earlier interruption
+
+    pages = [[make_summary(3), make_summary(2)], [make_summary(1)]]
+
+    synced = sync(PagedFakeClient(pages), activities_dir, page_size=2, request_delay=0)
+
+    assert synced == ["2", "1"]
+    assert (activities_dir / ".backfill_complete").exists()
+
+
+def test_gpx_download_failure_still_saves_json(tmp_path):
+    from garmin_sync import sync
+
+    class NoGpsPagedClient(PagedFakeClient):
+        def download_activity(self, activity_id, dl_fmt=None):
+            raise RuntimeError("no GPS data for this activity")
+
+    activities_dir = tmp_path / "activities"
+
+    sync(NoGpsPagedClient([[make_summary(1)]]), activities_dir, page_size=1, request_delay=0)
+
+    assert (activities_dir / "1.json").exists()
+    assert not (activities_dir / "1.gpx").exists()

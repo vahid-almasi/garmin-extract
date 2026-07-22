@@ -31,3 +31,67 @@ def test_call_with_retry_raises_after_max_retries(monkeypatch):
 
     with pytest.raises(GarminConnectTooManyRequestsError):
         call_with_retry(always_fails, max_retries=3, initial_delay=1.0)
+
+
+class DetailFakeClient:
+    def get_activity_details(self, activity_id):
+        return {"activityId": activity_id, "detail": True}
+
+    def get_activity_splits(self, activity_id):
+        return {"splits": []}
+
+    def get_activity_split_summaries(self, activity_id):
+        return {"summaries": []}
+
+    def get_activity_hr_in_timezones(self, activity_id):
+        return {"zones": []}
+
+    def get_activity_weather(self, activity_id):
+        return {"tempC": 20}
+
+    def download_activity(self, activity_id, dl_fmt=None):
+        return b"<gpx>route</gpx>"
+
+
+def test_fetch_activity_record_assembles_all_detail_pieces():
+    from garmin_sync import fetch_activity_record
+
+    summary = {"activityId": 1, "activityName": "Morning Run"}
+    record = fetch_activity_record(DetailFakeClient(), "1", summary)
+
+    assert record == {
+        "summary": summary,
+        "details": {"activityId": "1", "detail": True},
+        "splits": {"splits": []},
+        "split_summaries": {"summaries": []},
+        "hr_zones": {"zones": []},
+        "weather": {"tempC": 20},
+    }
+
+
+def test_fetch_activity_record_weather_failure_is_null():
+    from garmin_sync import fetch_activity_record
+
+    class NoWeatherClient(DetailFakeClient):
+        def get_activity_weather(self, activity_id):
+            raise RuntimeError("no weather station data")
+
+    record = fetch_activity_record(NoWeatherClient(), "1", {"activityId": 1})
+
+    assert record["weather"] is None
+
+
+def test_fetch_gpx_returns_bytes():
+    from garmin_sync import fetch_gpx
+
+    assert fetch_gpx(DetailFakeClient(), "1") == b"<gpx>route</gpx>"
+
+
+def test_fetch_gpx_returns_none_on_failure():
+    from garmin_sync import fetch_gpx
+
+    class NoGpsClient(DetailFakeClient):
+        def download_activity(self, activity_id, dl_fmt=None):
+            raise RuntimeError("no GPS data for this activity")
+
+    assert fetch_gpx(NoGpsClient(), "1") is None

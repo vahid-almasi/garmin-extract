@@ -1,6 +1,9 @@
 import time
+from pathlib import Path
 
 from garminconnect import Garmin, GarminConnectTooManyRequestsError
+
+from activity_store import known_activity_ids, save_activity
 
 
 def call_with_retry(fn, *args, max_retries: int = 5, initial_delay: float = 2.0, **kwargs):
@@ -46,10 +49,6 @@ def fetch_gpx(client, activity_id: str) -> bytes | None:
         return None
 
 
-from pathlib import Path
-
-from activity_store import known_activity_ids, save_activity
-
 BACKFILL_MARKER_NAME = ".backfill_complete"
 
 
@@ -59,6 +58,8 @@ def sync(client, activities_dir, page_size: int = 20, request_delay: float = 0.7
     marker_path = activities_dir / BACKFILL_MARKER_NAME
     is_backfill = not marker_path.exists()
     newly_synced: list[str] = []
+
+    total = call_with_retry(client.count_activities) if is_backfill else None
 
     start = 0
     while True:
@@ -76,12 +77,21 @@ def sync(client, activities_dir, page_size: int = 20, request_delay: float = 0.7
                 stop = True
                 break
 
-            record = fetch_activity_record(client, activity_id, summary)
-            gpx_bytes = fetch_gpx(client, activity_id)
+            try:
+                record = fetch_activity_record(client, activity_id, summary)
+                gpx_bytes = fetch_gpx(client, activity_id)
+            except GarminConnectTooManyRequestsError:
+                raise
+            except Exception as e:
+                print(f"Warning: skipping activity {activity_id} after fetch error: {e}")
+                continue
+
             save_activity(activities_dir, activity_id, record, gpx_bytes)
 
             known_ids.add(activity_id)
             newly_synced.append(activity_id)
+            if is_backfill and len(newly_synced) % 10 == 0:
+                print(f"Synced {len(newly_synced)}/{total} activities...")
             time.sleep(request_delay)
 
         if stop:

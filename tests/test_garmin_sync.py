@@ -133,6 +133,9 @@ class PagedFakeClient(DetailFakeClient):
             return []
         return self.pages[index]
 
+    def count_activities(self):
+        return sum(len(page) for page in self.pages)
+
 
 def make_summary(activity_id):
     return {"activityId": activity_id}
@@ -199,3 +202,44 @@ def test_gpx_download_failure_still_saves_json(tmp_path):
 
     assert (activities_dir / "1.json").exists()
     assert not (activities_dir / "1.gpx").exists()
+
+
+def test_sync_skips_activity_with_persistent_error_and_continues(tmp_path):
+    from garmin_sync import sync
+
+    class OneBadActivityClient(PagedFakeClient):
+        def get_activity_details(self, activity_id):
+            if activity_id == "2":
+                raise RuntimeError("permanently broken activity")
+            return super().get_activity_details(activity_id)
+
+    activities_dir = tmp_path / "activities"
+    pages = [[make_summary(3), make_summary(2), make_summary(1)]]
+
+    synced = sync(OneBadActivityClient(pages), activities_dir, page_size=3, request_delay=0)
+
+    assert synced == ["3", "1"]
+    assert (activities_dir / "3.json").exists()
+    assert not (activities_dir / "2.json").exists()
+    assert (activities_dir / "1.json").exists()
+    assert (activities_dir / ".backfill_complete").exists()
+
+
+def test_sync_still_propagates_rate_limit_during_fetch(tmp_path, monkeypatch):
+    from garminconnect import GarminConnectTooManyRequestsError
+
+    from garmin_sync import sync
+
+    monkeypatch.setattr("garmin_sync.time.sleep", lambda s: None)
+
+    class RateLimitedFetchClient(PagedFakeClient):
+        def get_activity_details(self, activity_id):
+            raise GarminConnectTooManyRequestsError("rate limited")
+
+    activities_dir = tmp_path / "activities"
+    pages = [[make_summary(1)]]
+
+    with pytest.raises(GarminConnectTooManyRequestsError):
+        sync(RateLimitedFetchClient(pages), activities_dir, page_size=1, request_delay=0)
+
+    assert not (activities_dir / ".backfill_complete").exists()

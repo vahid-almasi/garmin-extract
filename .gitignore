@@ -3,3 +3,5 @@ activities/
 __pycache__/
 *.pyc
 .superpowers/
+.claude/
+.DS_Store

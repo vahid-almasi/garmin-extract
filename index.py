@@ -9,8 +9,12 @@ ACTIVITIES_DIR = Path(__file__).parent / "activities"
 
 
 def main():
-    client = Garmin(os.environ["GARMIN_EMAIL"], os.environ["GARMIN_PASSWORD"])
-    client.login()
+    client = Garmin(
+        os.environ["GARMIN_EMAIL"],
+        os.environ["GARMIN_PASSWORD"],
+        prompt_mfa=lambda: input("Enter MFA code: "),
+    )
+    client.login(str(Path.home() / ".garminconnect"))
 
     synced = sync(client, ACTIVITIES_DIR)
 

@@ -53,6 +53,8 @@ export GARMIN_PASSWORD="your-password"
 python index.py
 ```
 
+If your Garmin account has MFA enabled, you'll be prompted for a code on first login. The session is then cached to `~/.garminconnect`, so later runs won't prompt for MFA again unless that session expires or is deleted.
+
 Activities are saved to the `activities/` directory. A `.backfill_complete` marker file is created there once the initial backfill finishes, so subsequent runs sync incrementally.
 
 ## Project Structure

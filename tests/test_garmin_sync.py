@@ -1,3 +1,5 @@
+import json
+
 import pytest
 from garminconnect import GarminConnectTooManyRequestsError
 
@@ -243,3 +245,69 @@ def test_sync_still_propagates_rate_limit_during_fetch(tmp_path, monkeypatch):
         sync(RateLimitedFetchClient(pages), activities_dir, page_size=1, request_delay=0)
 
     assert not (activities_dir / ".backfill_complete").exists()
+
+
+def test_ensure_digest_index_builds_from_existing_activities(tmp_path):
+    from garmin_sync import ensure_digest_index
+
+    activities_dir = tmp_path / "activities"
+    activities_dir.mkdir()
+    record = {
+        "summary": {
+            "activityId": 1,
+            "startTimeLocal": "2025-03-18 19:31:27",
+            "activityType": {"typeKey": "running"},
+            "duration": 600.0,
+        }
+    }
+    (activities_dir / "1.json").write_text(json.dumps(record))
+
+    entries, was_rebuilt = ensure_digest_index(activities_dir)
+
+    assert was_rebuilt is True
+    assert entries == [{"id": 1, "date": "2025-03-18", "type": "running", "duration_min": 10.0}]
+    assert json.loads((activities_dir / "index.jsonl").read_text().splitlines()[0]) == entries[0]
+
+
+def test_ensure_digest_index_reads_existing_without_rebuilding(tmp_path):
+    from garmin_sync import ensure_digest_index
+
+    activities_dir = tmp_path / "activities"
+    activities_dir.mkdir()
+    (activities_dir / "index.jsonl").write_text(
+        json.dumps({"id": 1, "date": "2025-01-01", "type": "running"}) + "\n"
+    )
+    # A stray activity file with no digest entry — must NOT trigger a rebuild
+    # since index.jsonl already exists.
+    (activities_dir / "2.json").write_text(json.dumps({"summary": {"activityId": 2}}))
+
+    entries, was_rebuilt = ensure_digest_index(activities_dir)
+
+    assert was_rebuilt is False
+    assert entries == [{"id": 1, "date": "2025-01-01", "type": "running"}]
+
+
+def test_ensure_digest_index_skips_record_missing_summary(tmp_path, capsys):
+    from garmin_sync import ensure_digest_index
+
+    activities_dir = tmp_path / "activities"
+    activities_dir.mkdir()
+    (activities_dir / "1.json").write_text(json.dumps({}))
+    (activities_dir / "2.json").write_text(
+        json.dumps(
+            {
+                "summary": {
+                    "activityId": 2,
+                    "startTimeLocal": "2025-01-01 08:00:00",
+                    "activityType": {"typeKey": "running"},
+                    "duration": 600.0,
+                }
+            }
+        )
+    )
+
+    entries, was_rebuilt = ensure_digest_index(activities_dir)
+
+    assert was_rebuilt is True
+    assert entries == [{"id": 2, "date": "2025-01-01", "type": "running", "duration_min": 10.0}]
+    assert "Warning" in capsys.readouterr().out

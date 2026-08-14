@@ -3,7 +3,15 @@ from pathlib import Path
 
 from garminconnect import Garmin, GarminConnectTooManyRequestsError
 
-from activity_store import known_activity_ids, save_activity
+from activity_store import (
+    digest_index_exists,
+    known_activity_ids,
+    load_all_activity_records,
+    read_digest_entries,
+    save_activity,
+    write_digest_index,
+)
+from digest import build_digest_entry
 
 
 def call_with_retry(fn, *args, max_retries: int = 5, initial_delay: float = 2.0, **kwargs):
@@ -50,6 +58,22 @@ def fetch_gpx(client, activity_id: str) -> bytes | None:
 
 
 BACKFILL_MARKER_NAME = ".backfill_complete"
+
+
+def ensure_digest_index(activities_dir: Path) -> tuple[list[dict], bool]:
+    activities_dir = Path(activities_dir)
+    if digest_index_exists(activities_dir):
+        return read_digest_entries(activities_dir), False
+
+    entries = []
+    for activity_id, record in load_all_activity_records(activities_dir):
+        try:
+            entries.append(build_digest_entry(record))
+        except (KeyError, TypeError) as e:
+            print(f"Warning: skipping activity {activity_id} while building digest: {e}")
+
+    write_digest_index(activities_dir, entries)
+    return entries, True
 
 
 def sync(client, activities_dir, page_size: int = 20, request_delay: float = 0.75) -> list[str]:

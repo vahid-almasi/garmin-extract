@@ -46,7 +46,7 @@ class DetailFakeClient:
         return {"summaries": []}
 
     def get_activity_hr_in_timezones(self, activity_id):
-        return {"zones": []}
+        return []
 
     def get_activity_weather(self, activity_id):
         return {"tempC": 20}
@@ -66,7 +66,7 @@ def test_fetch_activity_record_assembles_all_detail_pieces():
         "details": {"activityId": "1", "detail": True},
         "splits": {"splits": []},
         "split_summaries": {"summaries": []},
-        "hr_zones": {"zones": []},
+        "hr_zones": [],
         "weather": {"tempC": 20},
     }
 
@@ -140,7 +140,12 @@ class PagedFakeClient(DetailFakeClient):
 
 
 def make_summary(activity_id):
-    return {"activityId": activity_id}
+    return {
+        "activityId": activity_id,
+        "startTimeLocal": "2025-01-01 08:00:00",
+        "activityType": {"typeKey": "running"},
+        "duration": 600.0,
+    }
 
 
 def test_first_run_backfills_all_pages(tmp_path):
@@ -311,3 +316,67 @@ def test_ensure_digest_index_skips_record_missing_summary(tmp_path, capsys):
     assert was_rebuilt is True
     assert entries == [{"id": 2, "date": "2025-01-01", "type": "running", "duration_min": 10.0}]
     assert "Warning" in capsys.readouterr().out
+
+
+def test_sync_writes_digest_entry_and_weekly_rollup_for_new_activity(tmp_path):
+    from garmin_sync import sync
+
+    activities_dir = tmp_path / "activities"
+
+    sync(PagedFakeClient([[make_summary(1)]]), activities_dir, page_size=1, request_delay=0)
+
+    index_lines = (activities_dir / "index.jsonl").read_text().splitlines()
+    assert len(index_lines) == 1
+    assert json.loads(index_lines[0]) == {
+        "id": 1,
+        "date": "2025-01-01",
+        "type": "running",
+        "duration_min": 10.0,
+    }
+
+    weekly_lines = (activities_dir / "weekly.jsonl").read_text().splitlines()
+    assert len(weekly_lines) == 1
+    assert json.loads(weekly_lines[0])["activity_count"] == 1
+
+
+def test_sync_rebuilds_digest_for_preexisting_activities_with_no_new_ones(tmp_path):
+    from garmin_sync import sync
+
+    activities_dir = tmp_path / "activities"
+    activities_dir.mkdir()
+    existing_record = {
+        "summary": {
+            "activityId": 2,
+            "startTimeLocal": "2025-01-01 08:00:00",
+            "activityType": {"typeKey": "running"},
+            "duration": 600.0,
+        }
+    }
+    (activities_dir / "2.json").write_text(json.dumps(existing_record))
+    (activities_dir / ".backfill_complete").touch()
+
+    synced = sync(
+        PagedFakeClient([[make_summary(2)]]), activities_dir, page_size=1, request_delay=0
+    )
+
+    assert synced == []
+    index_lines = (activities_dir / "index.jsonl").read_text().splitlines()
+    assert len(index_lines) == 1
+    assert json.loads(index_lines[0])["id"] == 2
+    weekly_lines = (activities_dir / "weekly.jsonl").read_text().splitlines()
+    assert len(weekly_lines) == 1
+
+
+def test_sync_leaves_weekly_rollup_untouched_when_nothing_new(tmp_path):
+    from garmin_sync import sync
+
+    activities_dir = tmp_path / "activities"
+    sync(PagedFakeClient([[make_summary(1)]]), activities_dir, page_size=1, request_delay=0)
+    weekly_before = (activities_dir / "weekly.jsonl").read_text()
+
+    synced_again = sync(
+        PagedFakeClient([[make_summary(1)]]), activities_dir, page_size=1, request_delay=0
+    )
+
+    assert synced_again == []
+    assert (activities_dir / "weekly.jsonl").read_text() == weekly_before

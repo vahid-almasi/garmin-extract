@@ -4,14 +4,16 @@ from pathlib import Path
 from garminconnect import Garmin, GarminConnectTooManyRequestsError
 
 from activity_store import (
+    append_digest_entry,
     digest_index_exists,
     known_activity_ids,
     load_all_activity_records,
     read_digest_entries,
     save_activity,
     write_digest_index,
+    write_weekly_rollups,
 )
-from digest import build_digest_entry
+from digest import build_digest_entry, build_weekly_rollups
 
 
 def call_with_retry(fn, *args, max_retries: int = 5, initial_delay: float = 2.0, **kwargs):
@@ -83,6 +85,8 @@ def sync(client, activities_dir, page_size: int = 20, request_delay: float = 0.7
     is_backfill = not marker_path.exists()
     newly_synced: list[str] = []
 
+    digest_entries, index_was_rebuilt = ensure_digest_index(activities_dir)
+
     total = call_with_retry(client.count_activities) if is_backfill else None
 
     start = 0
@@ -112,6 +116,10 @@ def sync(client, activities_dir, page_size: int = 20, request_delay: float = 0.7
 
             save_activity(activities_dir, activity_id, record, gpx_bytes)
 
+            digest_entry = build_digest_entry(record)
+            append_digest_entry(activities_dir, digest_entry)
+            digest_entries.append(digest_entry)
+
             known_ids.add(activity_id)
             newly_synced.append(activity_id)
             if is_backfill and len(newly_synced) % 10 == 0:
@@ -126,5 +134,8 @@ def sync(client, activities_dir, page_size: int = 20, request_delay: float = 0.7
     if is_backfill:
         activities_dir.mkdir(parents=True, exist_ok=True)
         marker_path.touch()
+
+    if newly_synced or index_was_rebuilt:
+        write_weekly_rollups(activities_dir, build_weekly_rollups(digest_entries))
 
     return newly_synced

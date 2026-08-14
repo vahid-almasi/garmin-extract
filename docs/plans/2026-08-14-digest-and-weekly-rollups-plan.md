@@ -160,7 +160,7 @@ def build_digest_entry(record: dict) -> dict:
     }
 
     duration_s = summary.get("duration")
-    if duration_s:
+    if duration_s is not None:
         entry["duration_min"] = round(duration_s / 60, 1)
 
     distance_m = summary.get("distance")
@@ -172,11 +172,11 @@ def build_digest_entry(record: dict) -> dict:
             entry["avg_pace"] = _format_pace(distance_m, moving_duration_s)
 
     avg_hr = summary.get("averageHR")
-    if avg_hr:
+    if avg_hr is not None:
         entry["avg_hr"] = round(avg_hr)
 
     max_hr = summary.get("maxHR")
-    if max_hr:
+    if max_hr is not None:
         entry["max_hr"] = round(max_hr)
 
     elevation_gain = summary.get("elevationGain")
@@ -184,7 +184,7 @@ def build_digest_entry(record: dict) -> dict:
         entry["elevation_gain_m"] = round(elevation_gain)
 
     calories = summary.get("calories")
-    if calories:
+    if calories is not None:
         entry["calories"] = round(calories)
 
     training_effect = summary.get("trainingEffectLabel")

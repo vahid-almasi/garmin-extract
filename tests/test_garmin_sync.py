@@ -380,3 +380,27 @@ def test_sync_leaves_weekly_rollup_untouched_when_nothing_new(tmp_path):
 
     assert synced_again == []
     assert (activities_dir / "weekly.jsonl").read_text() == weekly_before
+
+
+def test_sync_appends_digest_entry_for_new_activity_against_existing_index(tmp_path):
+    from garmin_sync import sync
+
+    activities_dir = tmp_path / "activities"
+    sync(PagedFakeClient([[make_summary(1)]]), activities_dir, page_size=1, request_delay=0)
+
+    synced = sync(
+        PagedFakeClient([[make_summary(2), make_summary(1)]]),
+        activities_dir,
+        page_size=2,
+        request_delay=0,
+    )
+
+    assert synced == ["2"]
+    index_lines = (activities_dir / "index.jsonl").read_text().splitlines()
+    assert len(index_lines) == 2
+    ids = [json.loads(line)["id"] for line in index_lines]
+    assert ids == [1, 2]
+
+    weekly_lines = (activities_dir / "weekly.jsonl").read_text().splitlines()
+    assert len(weekly_lines) == 1
+    assert json.loads(weekly_lines[0])["activity_count"] == 2

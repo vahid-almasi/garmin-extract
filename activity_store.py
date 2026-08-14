@@ -23,8 +23,18 @@ def save_activity(activities_dir: Path, activity_id: str, record: dict, gpx_byte
         gpx_path.write_bytes(gpx_bytes)
 
 
+def _write_jsonl(path: Path, records: list[dict]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lines = "".join(json.dumps(record, default=str) + "\n" for record in records)
+    path.write_text(lines)
+
+
 def digest_index_exists(activities_dir: Path) -> bool:
     return (Path(activities_dir) / INDEX_FILENAME).exists()
+
+
+def weekly_rollups_exist(activities_dir: Path) -> bool:
+    return (Path(activities_dir) / WEEKLY_FILENAME).exists()
 
 
 def append_digest_entry(activities_dir: Path, entry: dict) -> None:
@@ -35,24 +45,26 @@ def append_digest_entry(activities_dir: Path, entry: dict) -> None:
 
 
 def write_digest_index(activities_dir: Path, entries: list[dict]) -> None:
-    activities_dir = Path(activities_dir)
-    activities_dir.mkdir(parents=True, exist_ok=True)
-    lines = "".join(json.dumps(entry, default=str) + "\n" for entry in entries)
-    (activities_dir / INDEX_FILENAME).write_text(lines)
+    _write_jsonl(Path(activities_dir) / INDEX_FILENAME, entries)
 
 
 def read_digest_entries(activities_dir: Path) -> list[dict]:
     path = Path(activities_dir) / INDEX_FILENAME
     if not path.exists():
         return []
-    return [json.loads(line) for line in path.read_text().splitlines() if line]
+    entries = []
+    for line in path.read_text().splitlines():
+        if not line:
+            continue
+        try:
+            entries.append(json.loads(line))
+        except json.JSONDecodeError as e:
+            print(f"Warning: skipping unreadable line in {INDEX_FILENAME}: {e}")
+    return entries
 
 
 def write_weekly_rollups(activities_dir: Path, rollups: list[dict]) -> None:
-    activities_dir = Path(activities_dir)
-    activities_dir.mkdir(parents=True, exist_ok=True)
-    lines = "".join(json.dumps(rollup, default=str) + "\n" for rollup in rollups)
-    (activities_dir / WEEKLY_FILENAME).write_text(lines)
+    _write_jsonl(Path(activities_dir) / WEEKLY_FILENAME, rollups)
 
 
 def load_all_activity_records(activities_dir: Path) -> list[tuple[str, dict]]:
@@ -66,6 +78,9 @@ def load_all_activity_records(activities_dir: Path) -> list[tuple[str, dict]]:
             record = json.loads(json_path.read_text())
         except (json.JSONDecodeError, OSError) as e:
             print(f"Warning: skipping unreadable activity file {json_path.name}: {e}")
+            continue
+        if not isinstance(record, dict):
+            print(f"Warning: skipping activity file {json_path.name}: not a JSON object")
             continue
         records.append((json_path.stem, record))
 

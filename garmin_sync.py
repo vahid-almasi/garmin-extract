@@ -10,6 +10,7 @@ from activity_store import (
     load_all_activity_records,
     read_digest_entries,
     save_activity,
+    weekly_rollups_exist,
     write_digest_index,
     write_weekly_rollups,
 )
@@ -71,7 +72,7 @@ def ensure_digest_index(activities_dir: Path) -> tuple[list[dict], bool]:
     for activity_id, record in load_all_activity_records(activities_dir):
         try:
             entries.append(build_digest_entry(record))
-        except (KeyError, TypeError) as e:
+        except Exception as e:
             print(f"Warning: skipping activity {activity_id} while building digest: {e}")
 
     write_digest_index(activities_dir, entries)
@@ -116,9 +117,16 @@ def sync(client, activities_dir, page_size: int = 20, request_delay: float = 0.7
 
             save_activity(activities_dir, activity_id, record, gpx_bytes)
 
-            digest_entry = build_digest_entry(record)
-            append_digest_entry(activities_dir, digest_entry)
-            digest_entries.append(digest_entry)
+            try:
+                digest_entry = build_digest_entry(record)
+            except Exception as e:
+                print(
+                    f"Warning: activity {activity_id} saved but not indexed "
+                    f"(delete index.jsonl to rebuild it on the next sync): {e}"
+                )
+            else:
+                append_digest_entry(activities_dir, digest_entry)
+                digest_entries.append(digest_entry)
 
             known_ids.add(activity_id)
             newly_synced.append(activity_id)
@@ -135,7 +143,7 @@ def sync(client, activities_dir, page_size: int = 20, request_delay: float = 0.7
         activities_dir.mkdir(parents=True, exist_ok=True)
         marker_path.touch()
 
-    if newly_synced or index_was_rebuilt:
+    if newly_synced or index_was_rebuilt or not weekly_rollups_exist(activities_dir):
         write_weekly_rollups(activities_dir, build_weekly_rollups(digest_entries))
 
     return newly_synced

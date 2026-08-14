@@ -59,8 +59,11 @@ Field rules:
   present.
 - Every other key is **omitted, not null**, when not meaningful for that
   activity:
-  - `distance_km` / `duration_min` / `avg_pace` — omitted if `summary.distance`
-    is missing or zero (e.g. yoga, strength).
+  - `duration_min` — included whenever `summary.duration` is present
+    (true for essentially every activity, including non-distance types like
+    yoga or strength), converted from seconds to minutes.
+  - `distance_km` — omitted if `summary.distance` is missing or zero (e.g.
+    yoga, strength).
   - `avg_pace` — included whenever `distance_km` is included, computed as
     `min:sec/km` from `distance` / `movingDuration`.
   - `avg_hr` / `max_hr` — omitted if `summary.averageHR` / `maxHR` absent.

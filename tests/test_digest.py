@@ -101,3 +101,87 @@ def test_build_digest_entry_yoga_no_distance_no_hr_no_weather_keys():
         "type": "yoga",
         "duration_min": 35.0,
     }
+
+
+from digest import build_weekly_rollups
+
+
+def test_build_weekly_rollups_groups_and_aggregates_one_week():
+    entries = [
+        {
+            "id": 1,
+            "date": "2025-03-17",
+            "type": "running",
+            "distance_km": 10.0,
+            "duration_min": 50.0,
+            "avg_pace": "5:00/km",
+            "avg_hr": 150,
+            "training_effect": "AEROBIC_BASE",
+            "hr_zone_seconds": [100, 200, 300, 0, 0],
+        },
+        {
+            "id": 2,
+            "date": "2025-03-19",
+            "type": "yoga",
+            "duration_min": 35.0,
+            "training_effect": "RECOVERY",
+        },
+    ]
+
+    rollups = build_weekly_rollups(entries)
+
+    assert rollups == [
+        {
+            "week": "2025-W12",
+            "start_date": "2025-03-17",
+            "end_date": "2025-03-23",
+            "activity_count": 2,
+            "total_distance_km": 10.0,
+            "total_duration_min": 85.0,
+            "by_type": {
+                "running": {"count": 1, "distance_km": 10.0, "duration_min": 50.0},
+                "yoga": {"count": 1, "duration_min": 35.0},
+            },
+            "avg_hr": 150,
+            "hr_zone_seconds": [100, 200, 300, 0, 0],
+            "training_effect_counts": {"AEROBIC_BASE": 1, "RECOVERY": 1},
+        }
+    ]
+
+
+def test_build_weekly_rollups_week_boundary_and_sort_order():
+    entries = [
+        {
+            "id": 1,
+            "date": "2025-03-17",  # Monday, W12
+            "type": "running",
+            "distance_km": 10.0,
+            "duration_min": 50.0,
+        },
+        {
+            "id": 2,
+            "date": "2025-03-16",  # Sunday, still W11
+            "type": "running",
+            "distance_km": 5.0,
+            "duration_min": 25.0,
+            "avg_hr": 140,
+        },
+    ]
+
+    rollups = build_weekly_rollups(entries)
+
+    assert [r["week"] for r in rollups] == ["2025-W11", "2025-W12"]
+    assert rollups[0] == {
+        "week": "2025-W11",
+        "start_date": "2025-03-10",
+        "end_date": "2025-03-16",
+        "activity_count": 1,
+        "total_distance_km": 5.0,
+        "total_duration_min": 25.0,
+        "by_type": {"running": {"count": 1, "distance_km": 5.0, "duration_min": 25.0}},
+        "avg_hr": 140,
+    }
+
+
+def test_build_weekly_rollups_empty_input():
+    assert build_weekly_rollups([]) == []

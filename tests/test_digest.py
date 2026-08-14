@@ -1,4 +1,4 @@
-from digest import build_digest_entry
+from digest import build_digest_entry, build_weekly_rollups
 
 
 FULL_RUNNING_RECORD = {
@@ -101,9 +101,6 @@ def test_build_digest_entry_yoga_no_distance_no_hr_no_weather_keys():
         "type": "yoga",
         "duration_min": 35.0,
     }
-
-
-from digest import build_weekly_rollups
 
 
 def test_build_weekly_rollups_groups_and_aggregates_one_week():

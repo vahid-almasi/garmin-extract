@@ -1,3 +1,7 @@
+from collections import defaultdict
+from datetime import date as date_cls, datetime, timedelta
+
+
 def build_digest_entry(record: dict) -> dict:
     summary = record["summary"]
 
@@ -63,10 +67,6 @@ def _extract_hr_zone_seconds(hr_zones: list[dict] | None) -> list[int] | None:
         return None
     by_zone = {z["zoneNumber"]: z["secsInZone"] for z in hr_zones}
     return [round(by_zone.get(n, 0.0)) for n in range(1, 6)]
-
-
-from collections import defaultdict
-from datetime import date as date_cls, datetime, timedelta
 
 
 def build_weekly_rollups(entries: list[dict]) -> list[dict]:

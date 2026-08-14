@@ -23,6 +23,7 @@ That loop — sync, review, plan, train, repeat — is the whole point. Everythi
 - **Incremental sync** — on later runs, only fetches activities newer than what's already stored, stopping as soon as it reaches a known activity.
 - **Rate-limit handling** — retries with exponential backoff when Garmin Connect returns a "too many requests" error.
 - **Resilient fetches** — skips an activity (with a warning) if it fails to fetch, rather than aborting the whole sync.
+- **Digest & weekly rollups** — maintains `activities/index.jsonl` (a lightweight per-activity summary) and `activities/weekly.jsonl` (ISO-week training rollups) automatically, so an LLM reviewing your history doesn't need to open every activity file.
 
 ## Requirements
 
@@ -61,7 +62,11 @@ Activities are saved to the `activities/` directory. A `.backfill_complete` mark
 ├── index.py            # Entry point: logs in and runs sync()
 ├── garmin_sync.py       # Core sync logic (backfill, incremental sync, retries)
 ├── activity_store.py    # Reads/writes activity JSON + GPX files
+├── digest.py             # Builds per-activity digest entries and weekly rollups
 ├── activities/           # Synced activity data (gitignored)
+│   ├── {id}.json/.gpx     # Per-activity detail + GPS track
+│   ├── index.jsonl         # Lightweight per-activity digest (one line each)
+│   └── weekly.jsonl         # ISO-week training rollups
 └── tests/                # Test suite
 ```
 

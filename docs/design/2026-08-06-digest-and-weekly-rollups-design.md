@@ -7,7 +7,7 @@ Date: 2026-08-06
 `activities/*.json` files are complete but heavy (full Garmin API payloads,
 including irrelevant fields like `userRoles`). Reviewing months of training
 history means Claude has to open every file individually. This spec adds a
-cheap, chronologically-ordered index of the fields that actually matter for
+cheap index of the fields that actually matter for
 coaching conversations, plus weekly rollups computed from that index — so a
 "review my last 6 months" conversation can work from two small files instead
 of scanning the full activity archive.
@@ -21,7 +21,7 @@ sources, automation). The other two are out of scope here.
 activities/
   {activityId}.json    # unchanged, existing per-activity files
   {activityId}.gpx      # unchanged
-  index.jsonl            # NEW: one digest line per activity, chronological
+  index.jsonl            # NEW: one digest line per activity
   weekly.jsonl            # NEW: one rollup line per ISO week
 ```
 
@@ -64,8 +64,10 @@ Field rules:
     yoga or strength), converted from seconds to minutes.
   - `distance_km` — omitted if `summary.distance` is missing or zero (e.g.
     yoga, strength).
-  - `avg_pace` — included whenever `distance_km` is included, computed as
-    `min:sec/km` from `distance` / `movingDuration`.
+  - `avg_pace` — included whenever `distance_km` is included and
+    `movingDuration` is present and non-zero, computed as `min:sec/km`
+    from `distance` / `movingDuration`. Omitted (rather than a nonsensical
+    `0:00/km`) if `movingDuration` is zero.
   - `avg_hr` / `max_hr` — omitted if `summary.averageHR` / `maxHR` absent.
   - `elevation_gain_m` — omitted if `summary.elevationGain` is missing or
     zero.
@@ -117,21 +119,35 @@ command or manual step:
 2. As each new activity is saved during a normal sync run (backfill or
    incremental), its digest line is appended to `index.jsonl` immediately
    after `save_activity()` succeeds for it.
-3. At the end of `sync()`, if any activities were added (or the rebuild in
-   step 1 ran), `weekly.jsonl` is fully recomputed from `index.jsonl` and
-   rewritten. This is cheap — aggregating digest lines (bytes each), not
-   re-reading full activity JSON/GPX.
+3. At the end of `sync()`, `weekly.jsonl` is fully recomputed from
+   `index.jsonl` and rewritten if any activities were added, the rebuild
+   in step 1 ran, or `weekly.jsonl` doesn't exist yet on disk (so deleting
+   just `weekly.jsonl` and re-running sync regenerates it even with no
+   new activities). This is cheap — aggregating digest lines (bytes
+   each), not re-reading full activity JSON/GPX.
 
 `index.jsonl` is append-only in normal operation (mirrors the existing
 sync's "never delete or overwrite" behavior for `{id}.json`/`.gpx`).
 `weekly.jsonl` is fully rewritten each time, since it's a small derived
 aggregate, not append-only data.
 
+Entry order in `index.jsonl` is the order activities were written, not a
+guaranteed chronological sort: normal sync appends newest-first (Garmin
+pages activities newest-first), while a rebuild-from-disk sorts
+oldest-first by `startTimeLocal`. Every entry carries its own `date`
+field, so date-based analysis never depends on file order.
+
 ## Error handling / edge cases
 
 - Rebuild scan hits a corrupt/unreadable activity JSON → skip with a
   warning, continue (same pattern as existing fetch-failure handling in
   `sync()`).
+- A record that fails digest extraction during the live sync loop (e.g. a
+  malformed `startTimeLocal`) is skipped with a warning noting the
+  activity was saved but not indexed — the gap is recoverable by deleting
+  `index.jsonl` to force a full rebuild on the next sync. The same
+  applies during a rebuild, and a corrupted line in an existing
+  `index.jsonl` is skipped the same way when read.
 - Rebuild and rollup recomputation are both pure functions of on-disk data
   → idempotent. Deleting `index.jsonl`/`weekly.jsonl` and re-running sync
   regenerates them deterministically (useful after a `digest.py` schema
@@ -155,6 +171,11 @@ aggregate, not append-only data.
 - Integration test: `sync()` run a second time with no new activities on
   the server → asserts `index.jsonl` has no duplicate lines and
   `weekly.jsonl` is unchanged.
+- Integration test: `sync()` run a second time with one genuinely new
+  activity against a pre-existing `index.jsonl` (the ordinary weekly
+  incremental workflow) → asserts the new digest line is appended without
+  duplicating or reordering existing lines, and `weekly.jsonl` reflects
+  the combined activity count.
 
 ## Out of scope (for this spec)
 

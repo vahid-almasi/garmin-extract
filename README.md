@@ -40,7 +40,15 @@ pip install -r requirements.txt
 
 ## Configuration
 
-Set your Garmin Connect credentials as environment variables:
+On first run, you'll be prompted for your Garmin Connect email and password. The password is entered with hidden input (via `getpass`) and saved to your OS keyring (macOS Keychain, Windows Credential Locker, or the Secret Service on desktop Linux) — later runs read from there silently, with no plaintext credentials on disk.
+
+To clear saved credentials (e.g. to switch accounts):
+
+```bash
+python -m garmin_extract --reset-credentials
+```
+
+**Headless environments** (servers, CI, cron jobs, containers) typically don't have a keyring backend available. In that case, set credentials as environment variables instead — these take priority over the keyring and skip the prompt entirely:
 
 ```bash
 export GARMIN_EMAIL="you@example.com"
@@ -50,7 +58,7 @@ export GARMIN_PASSWORD="your-password"
 ## Usage
 
 ```bash
-python index.py
+python -m garmin_extract
 ```
 
 If your Garmin account has MFA enabled, you'll be prompted for a code on first login. The session is then cached to `~/.garminconnect`, so later runs won't prompt for MFA again unless that session expires or is deleted.
@@ -61,15 +69,18 @@ Activities are saved to the `activities/` directory. A `.backfill_complete` mark
 
 ```
 .
-├── index.py            # Entry point: logs in and runs sync()
-├── garmin_sync.py       # Core sync logic (backfill, incremental sync, retries)
-├── activity_store.py    # Reads/writes activity JSON + GPX files
-├── digest.py             # Builds per-activity digest entries and weekly rollups
-├── activities/           # Synced activity data (gitignored)
-│   ├── {id}.json/.gpx     # Per-activity detail + GPS track
-│   ├── index.jsonl         # Lightweight per-activity digest (one line each)
-│   └── weekly.jsonl         # ISO-week training rollups
-└── tests/                # Test suite
+├── garmin_extract/
+│   ├── __main__.py        # Entry point: `python -m garmin_extract`
+│   ├── cli.py              # Argument parsing + top-level flow
+│   ├── credentials.py       # Keyring/env-var/getpass credential resolution
+│   ├── sync.py                # Core sync logic (backfill, incremental sync, retries)
+│   ├── activity_store.py       # Reads/writes activity JSON + GPX files
+│   └── digest.py                # Builds per-activity digest entries and weekly rollups
+├── activities/                  # Synced activity data (gitignored)
+│   ├── {id}.json/.gpx            # Per-activity detail + GPS track
+│   ├── index.jsonl                # Lightweight per-activity digest (one line each)
+│   └── weekly.jsonl                # ISO-week training rollups
+└── tests/                         # Test suite
 ```
 
 ## Testing

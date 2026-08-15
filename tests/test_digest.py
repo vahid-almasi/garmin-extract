@@ -1,4 +1,4 @@
-from digest import build_digest_entry, build_weekly_rollups
+from garmin_extract.digest import build_digest_entry, build_weekly_rollups
 
 
 FULL_RUNNING_RECORD = {

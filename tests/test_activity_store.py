@@ -1,6 +1,6 @@
 import json
 
-from activity_store import known_activity_ids, save_activity
+from garmin_extract.activity_store import known_activity_ids, save_activity
 
 
 def test_known_activity_ids_empty_when_dir_missing(tmp_path):
@@ -40,13 +40,13 @@ def test_save_activity_skips_gpx_when_none(tmp_path):
 
 
 def test_digest_index_exists_false_when_missing(tmp_path):
-    from activity_store import digest_index_exists
+    from garmin_extract.activity_store import digest_index_exists
 
     assert digest_index_exists(tmp_path / "activities") is False
 
 
 def test_append_digest_entry_creates_and_appends_jsonl(tmp_path):
-    from activity_store import append_digest_entry
+    from garmin_extract.activity_store import append_digest_entry
 
     activities_dir = tmp_path / "activities"
     append_digest_entry(activities_dir, {"id": 1, "date": "2025-01-01", "type": "running"})
@@ -60,7 +60,7 @@ def test_append_digest_entry_creates_and_appends_jsonl(tmp_path):
 
 
 def test_write_digest_index_overwrites_full_file(tmp_path):
-    from activity_store import append_digest_entry, write_digest_index
+    from garmin_extract.activity_store import append_digest_entry, write_digest_index
 
     activities_dir = tmp_path / "activities"
     append_digest_entry(activities_dir, {"id": 99, "date": "2025-01-01", "type": "running"})
@@ -79,13 +79,13 @@ def test_write_digest_index_overwrites_full_file(tmp_path):
 
 
 def test_read_digest_entries_empty_when_missing(tmp_path):
-    from activity_store import read_digest_entries
+    from garmin_extract.activity_store import read_digest_entries
 
     assert read_digest_entries(tmp_path / "activities") == []
 
 
 def test_read_digest_entries_round_trips_appended_entries(tmp_path):
-    from activity_store import append_digest_entry, read_digest_entries
+    from garmin_extract.activity_store import append_digest_entry, read_digest_entries
 
     activities_dir = tmp_path / "activities"
     append_digest_entry(activities_dir, {"id": 1, "date": "2025-01-01", "type": "running"})
@@ -98,7 +98,7 @@ def test_read_digest_entries_round_trips_appended_entries(tmp_path):
 
 
 def test_write_weekly_rollups_writes_one_line_per_rollup(tmp_path):
-    from activity_store import write_weekly_rollups
+    from garmin_extract.activity_store import write_weekly_rollups
 
     activities_dir = tmp_path / "activities"
     write_weekly_rollups(
@@ -111,7 +111,7 @@ def test_write_weekly_rollups_writes_one_line_per_rollup(tmp_path):
 
 
 def test_load_all_activity_records_sorted_by_start_time(tmp_path):
-    from activity_store import load_all_activity_records
+    from garmin_extract.activity_store import load_all_activity_records
 
     activities_dir = tmp_path / "activities"
     activities_dir.mkdir()
@@ -128,7 +128,7 @@ def test_load_all_activity_records_sorted_by_start_time(tmp_path):
 
 
 def test_load_all_activity_records_skips_unreadable_file(tmp_path, capsys):
-    from activity_store import load_all_activity_records
+    from garmin_extract.activity_store import load_all_activity_records
 
     activities_dir = tmp_path / "activities"
     activities_dir.mkdir()
@@ -144,6 +144,6 @@ def test_load_all_activity_records_skips_unreadable_file(tmp_path, capsys):
 
 
 def test_load_all_activity_records_empty_when_dir_missing(tmp_path):
-    from activity_store import load_all_activity_records
+    from garmin_extract.activity_store import load_all_activity_records
 
     assert load_all_activity_records(tmp_path / "activities") == []

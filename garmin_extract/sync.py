@@ -3,7 +3,7 @@ from pathlib import Path
 
 from garminconnect import Garmin, GarminConnectTooManyRequestsError
 
-from activity_store import (
+from garmin_extract.activity_store import (
     append_digest_entry,
     digest_index_exists,
     known_activity_ids,
@@ -14,7 +14,7 @@ from activity_store import (
     write_digest_index,
     write_weekly_rollups,
 )
-from digest import build_digest_entry, build_weekly_rollups
+from garmin_extract.digest import build_digest_entry, build_weekly_rollups
 
 
 def call_with_retry(fn, *args, max_retries: int = 5, initial_delay: float = 2.0, **kwargs):

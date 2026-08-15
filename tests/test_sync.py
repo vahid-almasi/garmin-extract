@@ -3,12 +3,12 @@ import json
 import pytest
 from garminconnect import GarminConnectTooManyRequestsError
 
-from garmin_sync import call_with_retry
+from garmin_extract.sync import call_with_retry
 
 
 def test_call_with_retry_retries_on_rate_limit(monkeypatch):
     sleeps = []
-    monkeypatch.setattr("garmin_sync.time.sleep", lambda s: sleeps.append(s))
+    monkeypatch.setattr("garmin_extract.sync.time.sleep", lambda s: sleeps.append(s))
 
     attempts = {"count": 0}
 
@@ -26,7 +26,7 @@ def test_call_with_retry_retries_on_rate_limit(monkeypatch):
 
 
 def test_call_with_retry_raises_after_max_retries(monkeypatch):
-    monkeypatch.setattr("garmin_sync.time.sleep", lambda s: None)
+    monkeypatch.setattr("garmin_extract.sync.time.sleep", lambda s: None)
 
     def always_fails():
         raise GarminConnectTooManyRequestsError("rate limited")
@@ -56,7 +56,7 @@ class DetailFakeClient:
 
 
 def test_fetch_activity_record_assembles_all_detail_pieces():
-    from garmin_sync import fetch_activity_record
+    from garmin_extract.sync import fetch_activity_record
 
     summary = {"activityId": 1, "activityName": "Morning Run"}
     record = fetch_activity_record(DetailFakeClient(), "1", summary)
@@ -72,7 +72,7 @@ def test_fetch_activity_record_assembles_all_detail_pieces():
 
 
 def test_fetch_activity_record_weather_failure_is_null():
-    from garmin_sync import fetch_activity_record
+    from garmin_extract.sync import fetch_activity_record
 
     class NoWeatherClient(DetailFakeClient):
         def get_activity_weather(self, activity_id):
@@ -84,13 +84,13 @@ def test_fetch_activity_record_weather_failure_is_null():
 
 
 def test_fetch_gpx_returns_bytes():
-    from garmin_sync import fetch_gpx
+    from garmin_extract.sync import fetch_gpx
 
     assert fetch_gpx(DetailFakeClient(), "1") == b"<gpx>route</gpx>"
 
 
 def test_fetch_gpx_returns_none_on_failure():
-    from garmin_sync import fetch_gpx
+    from garmin_extract.sync import fetch_gpx
 
     class NoGpsClient(DetailFakeClient):
         def download_activity(self, activity_id, dl_fmt=None):
@@ -100,9 +100,9 @@ def test_fetch_gpx_returns_none_on_failure():
 
 
 def test_fetch_activity_record_propagates_exhausted_rate_limit(monkeypatch):
-    from garmin_sync import fetch_activity_record
+    from garmin_extract.sync import fetch_activity_record
 
-    monkeypatch.setattr("garmin_sync.time.sleep", lambda s: None)
+    monkeypatch.setattr("garmin_extract.sync.time.sleep", lambda s: None)
 
     class RateLimitedWeatherClient(DetailFakeClient):
         def get_activity_weather(self, activity_id):
@@ -113,9 +113,9 @@ def test_fetch_activity_record_propagates_exhausted_rate_limit(monkeypatch):
 
 
 def test_fetch_gpx_propagates_exhausted_rate_limit(monkeypatch):
-    from garmin_sync import fetch_gpx
+    from garmin_extract.sync import fetch_gpx
 
-    monkeypatch.setattr("garmin_sync.time.sleep", lambda s: None)
+    monkeypatch.setattr("garmin_extract.sync.time.sleep", lambda s: None)
 
     class RateLimitedGpsClient(DetailFakeClient):
         def download_activity(self, activity_id, dl_fmt=None):
@@ -149,8 +149,8 @@ def make_summary(activity_id):
 
 
 def test_first_run_backfills_all_pages(tmp_path):
-    from activity_store import known_activity_ids
-    from garmin_sync import sync
+    from garmin_extract.activity_store import known_activity_ids
+    from garmin_extract.sync import sync
 
     pages = [
         [make_summary(3), make_summary(2)],
@@ -166,7 +166,7 @@ def test_first_run_backfills_all_pages(tmp_path):
 
 
 def test_incremental_run_stops_at_first_known_activity(tmp_path):
-    from garmin_sync import sync
+    from garmin_extract.sync import sync
 
     activities_dir = tmp_path / "activities"
     activities_dir.mkdir()
@@ -182,7 +182,7 @@ def test_incremental_run_stops_at_first_known_activity(tmp_path):
 
 
 def test_interrupted_backfill_resumes_without_marker(tmp_path):
-    from garmin_sync import sync
+    from garmin_extract.sync import sync
 
     activities_dir = tmp_path / "activities"
     activities_dir.mkdir()
@@ -197,7 +197,7 @@ def test_interrupted_backfill_resumes_without_marker(tmp_path):
 
 
 def test_gpx_download_failure_still_saves_json(tmp_path):
-    from garmin_sync import sync
+    from garmin_extract.sync import sync
 
     class NoGpsPagedClient(PagedFakeClient):
         def download_activity(self, activity_id, dl_fmt=None):
@@ -212,7 +212,7 @@ def test_gpx_download_failure_still_saves_json(tmp_path):
 
 
 def test_sync_skips_activity_with_persistent_error_and_continues(tmp_path):
-    from garmin_sync import sync
+    from garmin_extract.sync import sync
 
     class OneBadActivityClient(PagedFakeClient):
         def get_activity_details(self, activity_id):
@@ -235,9 +235,9 @@ def test_sync_skips_activity_with_persistent_error_and_continues(tmp_path):
 def test_sync_still_propagates_rate_limit_during_fetch(tmp_path, monkeypatch):
     from garminconnect import GarminConnectTooManyRequestsError
 
-    from garmin_sync import sync
+    from garmin_extract.sync import sync
 
-    monkeypatch.setattr("garmin_sync.time.sleep", lambda s: None)
+    monkeypatch.setattr("garmin_extract.sync.time.sleep", lambda s: None)
 
     class RateLimitedFetchClient(PagedFakeClient):
         def get_activity_details(self, activity_id):
@@ -253,7 +253,7 @@ def test_sync_still_propagates_rate_limit_during_fetch(tmp_path, monkeypatch):
 
 
 def test_ensure_digest_index_builds_from_existing_activities(tmp_path):
-    from garmin_sync import ensure_digest_index
+    from garmin_extract.sync import ensure_digest_index
 
     activities_dir = tmp_path / "activities"
     activities_dir.mkdir()
@@ -275,7 +275,7 @@ def test_ensure_digest_index_builds_from_existing_activities(tmp_path):
 
 
 def test_ensure_digest_index_reads_existing_without_rebuilding(tmp_path):
-    from garmin_sync import ensure_digest_index
+    from garmin_extract.sync import ensure_digest_index
 
     activities_dir = tmp_path / "activities"
     activities_dir.mkdir()
@@ -293,7 +293,7 @@ def test_ensure_digest_index_reads_existing_without_rebuilding(tmp_path):
 
 
 def test_ensure_digest_index_skips_record_missing_summary(tmp_path, capsys):
-    from garmin_sync import ensure_digest_index
+    from garmin_extract.sync import ensure_digest_index
 
     activities_dir = tmp_path / "activities"
     activities_dir.mkdir()
@@ -319,7 +319,7 @@ def test_ensure_digest_index_skips_record_missing_summary(tmp_path, capsys):
 
 
 def test_sync_writes_digest_entry_and_weekly_rollup_for_new_activity(tmp_path):
-    from garmin_sync import sync
+    from garmin_extract.sync import sync
 
     activities_dir = tmp_path / "activities"
 
@@ -340,7 +340,7 @@ def test_sync_writes_digest_entry_and_weekly_rollup_for_new_activity(tmp_path):
 
 
 def test_sync_rebuilds_digest_for_preexisting_activities_with_no_new_ones(tmp_path):
-    from garmin_sync import sync
+    from garmin_extract.sync import sync
 
     activities_dir = tmp_path / "activities"
     activities_dir.mkdir()
@@ -368,7 +368,7 @@ def test_sync_rebuilds_digest_for_preexisting_activities_with_no_new_ones(tmp_pa
 
 
 def test_sync_leaves_weekly_rollup_untouched_when_nothing_new(tmp_path):
-    from garmin_sync import sync
+    from garmin_extract.sync import sync
 
     activities_dir = tmp_path / "activities"
     sync(PagedFakeClient([[make_summary(1)]]), activities_dir, page_size=1, request_delay=0)
@@ -383,7 +383,7 @@ def test_sync_leaves_weekly_rollup_untouched_when_nothing_new(tmp_path):
 
 
 def test_sync_appends_digest_entry_for_new_activity_against_existing_index(tmp_path):
-    from garmin_sync import sync
+    from garmin_extract.sync import sync
 
     activities_dir = tmp_path / "activities"
     sync(PagedFakeClient([[make_summary(1)]]), activities_dir, page_size=1, request_delay=0)

@@ -1,6 +1,46 @@
-# Garmin Connect Sync
+# garmin-extract
 
 Syncs activity data from Garmin Connect to local storage. Each activity is saved as a pair of files: a `.json` file with summary, details, splits, HR zones, and weather data, and a `.gpx` file with the GPS track (when available).
+
+## Requirements
+
+- Python 3.12+ (required by the `garminconnect` package)
+- A Garmin Connect account
+
+## Installation
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+## Usage
+
+```bash
+python -m garmin_extract
+```
+
+On first run, you'll be prompted for your Garmin Connect email and password (hidden input, via `getpass`). It's then saved to your OS keyring — macOS Keychain, Windows Credential Locker, or the Secret Service on desktop Linux — so later runs read it silently with no plaintext credentials on disk and no environment variables to set. This is fully automatic; there's no separate setup step.
+
+If your Garmin account has MFA enabled, you'll also be prompted for a code on first login. That session is cached to `~/.garminconnect`, so later runs won't prompt for MFA again unless the session expires or is deleted.
+
+Activities are saved to the `activities/` directory. A `.backfill_complete` marker file is created there once the initial backfill finishes, so subsequent runs sync incrementally.
+
+To clear saved credentials (e.g. to switch accounts):
+
+```bash
+python -m garmin_extract --reset-credentials
+```
+
+### Fallback: environment variables
+
+If your OS keyring isn't available — headless servers, CI, cron jobs, Docker containers — set credentials as environment variables instead. This is **only needed when there's no keyring**; on a normal desktop you don't need this at all. Env vars take priority over the keyring and skip the prompt entirely:
+
+```bash
+export GARMIN_EMAIL="you@example.com"
+export GARMIN_PASSWORD="your-password"
+```
 
 ## How I Use This
 
@@ -24,46 +64,6 @@ That loop — sync, review, plan, train, repeat — is the whole point. Everythi
 - **Rate-limit handling** — retries with exponential backoff when Garmin Connect returns a "too many requests" error.
 - **Resilient fetches** — skips an activity (with a warning) if it fails to fetch, rather than aborting the whole sync.
 - **Digest & weekly rollups** — maintains `activities/index.jsonl` (a lightweight per-activity summary) and `activities/weekly.jsonl` (ISO-week training rollups) automatically, so an LLM reviewing your history doesn't need to open every activity file.
-
-## Requirements
-
-- Python 3.14+
-- A Garmin Connect account
-
-## Installation
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
-
-## Configuration
-
-On first run, you'll be prompted for your Garmin Connect email and password. The password is entered with hidden input (via `getpass`) and saved to your OS keyring (macOS Keychain, Windows Credential Locker, or the Secret Service on desktop Linux) — later runs read from there silently, with no plaintext credentials on disk.
-
-To clear saved credentials (e.g. to switch accounts):
-
-```bash
-python -m garmin_extract --reset-credentials
-```
-
-**Headless environments** (servers, CI, cron jobs, containers) typically don't have a keyring backend available. In that case, set credentials as environment variables instead — these take priority over the keyring and skip the prompt entirely:
-
-```bash
-export GARMIN_EMAIL="you@example.com"
-export GARMIN_PASSWORD="your-password"
-```
-
-## Usage
-
-```bash
-python -m garmin_extract
-```
-
-If your Garmin account has MFA enabled, you'll be prompted for a code on first login. The session is then cached to `~/.garminconnect`, so later runs won't prompt for MFA again unless that session expires or is deleted.
-
-Activities are saved to the `activities/` directory. A `.backfill_complete` marker file is created there once the initial backfill finishes, so subsequent runs sync incrementally.
 
 ## Project Structure
 
